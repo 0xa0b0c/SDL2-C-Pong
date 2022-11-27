@@ -1,3 +1,4 @@
+#include <SDL2/SDL_render.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -137,9 +138,19 @@ main(void)
 static bool
 game_init(void)
 {
-	if (SDL_CreateWindowAndRenderer(WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_MAXIMIZED, &g_window, &g_renderer) < 0)
+	g_window = SDL_CreateWindow("Pong with SDL2!", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_MAXIMIZED);
+
+	if (!g_window)
 	{
-		(void)fprintf(stderr, "Could not create SDL window/renderer: %s.\n", SDL_GetError());
+		(void)fprintf(stderr, "Could not create SDL window: %s.\n", SDL_GetError());
+		return false;
+	}
+
+	g_renderer = SDL_CreateRenderer(g_window, -1, SDL_RENDERER_ACCELERATED);
+
+	if (!g_renderer)
+	{
+		(void)fprintf(stderr, "Could not create SDL renderer: %s.\n", SDL_GetError());
 		return false;
 	}
 
@@ -464,21 +475,20 @@ game_set_initial_positions(void)
 		g_paddles[PADDLE_AI_INDEX].dy = PADDLE_CPU_SPEED;
 	}
 
+	if (g_scores[PADDLE_HUMAN_INDEX] > g_scores[PADDLE_AI_INDEX])
+	{
+		g_ball.dx = 1;
+	}
+	else
+	{
+		g_ball.dx = -1;
+	}
+
 	{
 		g_ball.x = WINDOW_WIDTH / 2 - BALL_WIDTH;
 		g_ball.y = WINDOW_HEIGHT / 2 - BALL_HEIGHT;
 		g_ball.w = BALL_WIDTH;
 		g_ball.h = BALL_HEIGHT;
-
-		if (g_scores[PADDLE_HUMAN_INDEX] > g_scores[PADDLE_AI_INDEX])
-		{
-			g_ball.dx = 1;
-		}
-		else
-		{
-			g_ball.dx = -1;
-		}
-
 		g_ball.dy = BALL_SPEED;
 	}
 }
