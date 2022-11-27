@@ -4,7 +4,7 @@ WARN = -Wall -Wextra -pedantic -Werror
 DEBUG = -ggdb -DDEBUG
 RELEASE = -O3
 CFLAGS = -std=c99 $(DEBUG) $(WARN)
-LDFLAGS = -lSDL2 -lSDL2_image
+LDFLAGS = -lSDL2 -lSDL2_image -lSDL2_ttf
 
 all: kesman
 	mkdir -p out

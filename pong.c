@@ -21,6 +21,7 @@
 #define HUMAN_PADDLE_INDEX 0
 #define AI_PADDLE_INDEX 1
 #define SCOREBOARD_FONT_SIZE 28
+#define SCORE_TEXT_SIZE 32
 
 // SDL Stuff.
 extern bool subystem_init(void);
@@ -68,14 +69,9 @@ typedef struct {
 // Global Variables.
 static SDL_Window   *g_window = 0;
 static SDL_Renderer *g_renderer = 0;
-static SDL_Texture  *g_tex_startup_menu = 0;
-static SDL_Texture  *g_tex_pause_menu = 0;
-static SDL_Texture  *g_tex_score_player = 0;
-static SDL_Texture  *g_tex_score_ai = 0;
-static int           g_tex_startup_menu_width = 0;
-static int           g_tex_startup_menu_height = 0;
-static int           g_tex_pause_menu_width = 0;
-static int           g_tex_pause_menu_height = 0;
+static texture_t     g_tex_startup_menu;
+static texture_t     g_tex_pause_menu;
+static texture_t    *g_tex_scores[NUM_PADDLES];
 static game_status_t g_game_status = GAME_STATUS_MAIN_MENU;
 static paddle_t      g_paddles[NUM_PADDLES];
 static ball_t        g_ball;
@@ -105,7 +101,7 @@ static void game_update(void);
 static void game_set_initial_positions(void);
 static void game_update_player_pad(pad_direction);
 static bool game_ball_collision_with_paddle(paddle_t);
-static bool game_load_texture_from_text(const char *, SDL_Color, texture_t *);
+static bool game_load_texture_from_text(const char *, SDL_Color, texture_t **);
 
 // @TODO(lev): move somewhere else and declare extern.
 // Timer functions to manually cap fps.
@@ -164,6 +160,9 @@ game_init(void)
 		return false;
 	}
 
+	g_tex_scores[HUMAN_PADDLE_INDEX] = malloc(sizeof(texture_t));
+	g_tex_scores[AI_PADDLE_INDEX] = malloc(sizeof(texture_t));
+
 	game_set_initial_positions();
 
 	return true;
@@ -172,14 +171,22 @@ game_init(void)
 static void
 game_close(void)
 {
+	for (size_t i = 0; i < NUM_PADDLES; ++i)
+	{
+		SDL_DestroyTexture(g_tex_scores[i]->texture);
+		g_tex_scores[i]->texture = 0;
+		free(g_tex_scores[i]);
+	}
+
+
 	TTF_CloseFont(g_font);
 	g_font = 0;
 
-	SDL_DestroyTexture(g_tex_pause_menu);
-	g_tex_pause_menu = 0;
+	SDL_DestroyTexture(g_tex_pause_menu.texture);
+	g_tex_pause_menu.texture = 0;
 
-	SDL_DestroyTexture(g_tex_startup_menu);
-	g_tex_startup_menu = 0;
+	SDL_DestroyTexture(g_tex_startup_menu.texture);
+	g_tex_startup_menu.texture = 0;
 
 	SDL_DestroyRenderer(g_renderer);
 	g_renderer = 0;
@@ -199,13 +206,13 @@ game_load_main_menu(void)
 		return false;
 	}
 
-	g_tex_startup_menu = SDL_CreateTextureFromSurface(g_renderer, s);
+	g_tex_startup_menu.texture = SDL_CreateTextureFromSurface(g_renderer, s);
 
-	SDL_QueryTexture(g_tex_startup_menu, 0, 0, &g_tex_startup_menu_width, &g_tex_startup_menu_height);
+	SDL_QueryTexture(g_tex_startup_menu.texture, 0, 0, &g_tex_startup_menu.width, &g_tex_startup_menu.height);
 
 	SDL_FreeSurface(s);
 
-	return g_tex_startup_menu != 0;
+	return g_tex_startup_menu.texture != 0;
 }
 
 static bool
@@ -219,13 +226,13 @@ game_load_pause_menu(void)
 		return false;
 	}
 
-	g_tex_pause_menu = SDL_CreateTextureFromSurface(g_renderer, s);
+	g_tex_pause_menu.texture = SDL_CreateTextureFromSurface(g_renderer, s);
 
-	SDL_QueryTexture(g_tex_pause_menu, 0, 0, &g_tex_pause_menu_width, &g_tex_pause_menu_height);
+	SDL_QueryTexture(g_tex_pause_menu.texture, 0, 0, &g_tex_pause_menu.width, &g_tex_pause_menu.height);
 
 	SDL_FreeSurface(s);
 
-	return g_tex_pause_menu != 0;
+	return g_tex_pause_menu.texture != 0;
 }
 
 static void
@@ -268,8 +275,8 @@ game_loop(void)
 static void
 game_draw_menu(void)
 {
-	SDL_Rect render_quad = {0, 0, g_tex_startup_menu_width, g_tex_startup_menu_height};
-	SDL_RenderCopy(g_renderer, g_tex_startup_menu, 0, &render_quad);
+	SDL_Rect render_quad = {0, 0, g_tex_startup_menu.width, g_tex_startup_menu.height};
+	SDL_RenderCopy(g_renderer, g_tex_startup_menu.texture, 0, &render_quad);
 }
 
 static void
@@ -533,8 +540,8 @@ game_handle_input_paused(SDL_Event *event)
 static void
 game_draw_pause_menu(void)
 {
-	SDL_Rect render_quad = {0, 0, g_tex_pause_menu_width, g_tex_pause_menu_height};
-	SDL_RenderCopy(g_renderer, g_tex_pause_menu, 0, &render_quad);
+	SDL_Rect render_quad = {0, 0, g_tex_pause_menu.width, g_tex_pause_menu.height};
+	SDL_RenderCopy(g_renderer, g_tex_pause_menu.texture, 0, &render_quad);
 }
 
 static bool
@@ -576,17 +583,42 @@ game_ball_collision_with_paddle(paddle_t paddle)
 static void
 game_draw_scores(void)
 {
+	char text[SCORE_TEXT_SIZE];
+	const SDL_Color white = {0xff, 0xff, 0xff, 0xff};
 
+	snprintf(text, SCORE_TEXT_SIZE, "%d", g_scores[HUMAN_PADDLE_INDEX]);
+
+	if (game_load_texture_from_text(text, white, &g_tex_scores[HUMAN_PADDLE_INDEX]))
+	{
+		SDL_Rect render_quad = {WINDOW_WIDTH * 0.25, 10, g_tex_scores[HUMAN_PADDLE_INDEX]->width, g_tex_scores[HUMAN_PADDLE_INDEX]->height};
+		SDL_RenderCopy(g_renderer, g_tex_scores[HUMAN_PADDLE_INDEX]->texture, 0, &render_quad);
+	}
+	else
+	{
+		debug_print("Could not load texture from player's score text.\n");
+	}
+
+	snprintf(text, SCORE_TEXT_SIZE, "%d", g_scores[AI_PADDLE_INDEX]);
+
+	if (game_load_texture_from_text(text, white, &g_tex_scores[AI_PADDLE_INDEX]))
+	{
+		SDL_Rect render_quad = {WINDOW_WIDTH * 0.75, 10, g_tex_scores[AI_PADDLE_INDEX]->width, g_tex_scores[AI_PADDLE_INDEX]->height};
+		SDL_RenderCopy(g_renderer, g_tex_scores[AI_PADDLE_INDEX]->texture, 0, &render_quad);
+	}
+	else
+	{
+		debug_print("Could not load texture from AI's score text.\n");
+	}
 }
 
 static bool
-game_load_texture_from_text(const char *text, SDL_Color colour, texture_t *t)
+game_load_texture_from_text(const char *text, SDL_Color colour, texture_t **t)
 {
 	// Override previous texture.
-	if (t->texture)
+	if (*t)
 	{
-		SDL_DestroyTexture(t->texture);
-		t->texture = 0;
+		SDL_DestroyTexture((*t)->texture);
+		(*t)->texture = 0;
 	}
 
 	SDL_Surface *surface = TTF_RenderText_Solid(g_font, text, colour);
@@ -597,17 +629,17 @@ game_load_texture_from_text(const char *text, SDL_Color colour, texture_t *t)
 		return false;
 	}
 
-	t->texture = SDL_CreateTextureFromSurface(g_renderer, surface);
+	(*t)->texture = SDL_CreateTextureFromSurface(g_renderer, surface);
 
-	if (t->texture != 0)
+	if (!(*t)->texture)
 	{
 		debug_print("Could not create texture from surface: %s.\n", SDL_GetError());
 	}
 
-	t->width = surface->w;
-	t->height = surface->h;
+	(*t)->width = surface->w;
+	(*t)->height = surface->h;
 
 	SDL_FreeSurface(surface);
 
-	return t->texture != 0;
+	return (*t)->texture != 0;
 }
