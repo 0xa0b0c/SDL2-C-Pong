@@ -1,7 +1,7 @@
 # TODO
 
-4. Random factor for direction of ball when game is reset.
-5. Bonus speed with shift.
-6. Refactor some functions.
-7. Make better art.
-8. Add sound?
+1. Improve gameplay (cpu is too dumb) and some visual glitch when hitting paddles.
+2. Bonus speed with shift.
+3. Refactor some functions.
+4. Make better art.
+5. Add sound?

@@ -1,27 +1,30 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
-#include <math.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
 
 #include "config.h"
 #include "debug.h"
+#include "timer.h"
 
 // Constants.
-#define NUM_PADDLES 2
+#define PADDLE_TOTAL 2
 #define PADDLE_WIDTH 10
 #define PADDLE_HEIGHT 50
 #define PADDLE_HUMAN_SPEED 2
 #define PADDLE_CPU_SPEED 1
+#define PADDLE_HUMAN_INDEX 0
+#define PADDLE_AI_INDEX 1
+
 #define BALL_WIDTH 10
 #define BALL_HEIGHT 10
 #define BALL_SPEED 2
-#define HUMAN_PADDLE_INDEX 0
-#define AI_PADDLE_INDEX 1
+
 #define SCOREBOARD_FONT_SIZE 28
-#define SCORE_TEXT_SIZE 32
+#define SCOREBOARD_TEXT_SIZE 32
+#define SCOREBOARD_LIMIT 1
 
 // SDL Stuff.
 extern bool subystem_init(void);
@@ -31,7 +34,9 @@ extern void subsystem_close(void);
 typedef enum {
 	GAME_STATUS_MAIN_MENU,
 	GAME_STATUS_PLAYING,
-	GAME_STATUS_PAUSED
+	GAME_STATUS_PAUSED,
+	GAME_STATUS_GAME_OVER,
+	GAME_STATUS_GAME_WON
 } game_status_t;
 
 typedef struct {
@@ -51,10 +56,6 @@ typedef struct {
 	int dy;
 } ball_t;
 
-typedef struct {
-	Uint64 start_ticks;
-} p_timer_t;
-
 typedef enum {
 	PAD_GO_UP,
 	PAD_GO_DOWN
@@ -69,44 +70,46 @@ typedef struct {
 // Global Variables.
 static SDL_Window   *g_window = 0;
 static SDL_Renderer *g_renderer = 0;
-static texture_t     g_tex_startup_menu;
-static texture_t     g_tex_pause_menu;
-static texture_t    *g_tex_scores[NUM_PADDLES];
+static texture_t    *g_tex_startup_menu;
+static texture_t    *g_tex_pause_menu;
+static texture_t    *g_tex_game_over;
+static texture_t    *g_tex_game_won;
+static texture_t    *g_tex_scores[PADDLE_TOTAL];
 static game_status_t g_game_status = GAME_STATUS_MAIN_MENU;
-static paddle_t      g_paddles[NUM_PADDLES];
+static paddle_t      g_paddles[PADDLE_TOTAL];
 static ball_t        g_ball;
-static int           g_scores[NUM_PADDLES];
+static int           g_scores[PADDLE_TOTAL];
 static TTF_Font     *g_font;
 
 // Game Functions.
 static bool game_init(void);
 static void game_close(void);
-// @TODO(lev): this could be refactored!
-static bool game_load_main_menu(void);
-static bool game_load_pause_menu(void);
+static bool game_load_texture_from_img(texture_t **, const char *);
+static void game_loop(void);
+
 static void game_draw_menu(void);
 static void game_draw_pause_menu(void);
-//
-static void game_loop(void);
+static void game_draw_game_over(void);
+static void game_draw_game_won(void);
 static void game_draw_paddles(void);
 static void game_draw_ball(void);
 static void game_draw_net(void);
 static void game_draw_scores(void);
+
 static void game_handle_input(SDL_Event *, bool *);
 static void game_handle_input_main_menu(SDL_Event *);
 static void game_handle_input_playing(SDL_Event *);
 static void game_handle_input_paused(SDL_Event *);
+static void game_handle_input_game_ended(SDL_Event *);
+
 static void game_render(void);
 static void game_update(void);
 static void game_set_initial_positions(void);
+static void game_reset_scoreboard(void);
 static void game_update_player_pad(pad_direction);
 static bool game_ball_collision_with_paddle(paddle_t);
 static bool game_load_texture_from_text(const char *, SDL_Color, texture_t **);
-
-// @TODO(lev): move somewhere else and declare extern.
-// Timer functions to manually cap fps.
-static void   timer_start(p_timer_t *);
-static Uint64 timer_get_ticks(p_timer_t *);
+static void game_check_win_condition(void);
 
 int
 main(void)
@@ -126,18 +129,6 @@ main(void)
 		exit(EXIT_FAILURE);
 	}
 
-	if (!game_load_main_menu())
-	{
-		(void)fprintf(stdout, "Could not load main menu.\n");
-		exit(EXIT_FAILURE);
-	}
-
-	if (!game_load_pause_menu())
-	{
-		(void)fprintf(stdout, "Could not load pause menu.\n");
-		exit(EXIT_FAILURE);
-	}
-
 	game_loop();
 
 	return EXIT_SUCCESS;
@@ -148,20 +139,48 @@ game_init(void)
 {
 	if (SDL_CreateWindowAndRenderer(WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_MAXIMIZED, &g_window, &g_renderer) < 0)
 	{
-		debug_print("Could not create SDL window/renderer: %s.\n", SDL_GetError());
+		(void)fprintf(stderr, "Could not create SDL window/renderer: %s.\n", SDL_GetError());
 		return false;
 	}
 
-	g_font = TTF_OpenFont("ARCADECLASSIC.TTF", SCOREBOARD_FONT_SIZE);
+	g_font = TTF_OpenFont(FILEPATH_FONT, SCOREBOARD_FONT_SIZE);
 
 	if (!g_font)
 	{
-		debug_print("Could not open TTF Font: %s.\n", TTF_GetError());
+		(void)fprintf(stderr, "Could not open TTF Font: %s.\n", TTF_GetError());
 		return false;
 	}
 
-	g_tex_scores[HUMAN_PADDLE_INDEX] = malloc(sizeof(texture_t));
-	g_tex_scores[AI_PADDLE_INDEX] = malloc(sizeof(texture_t));
+	g_tex_scores[PADDLE_HUMAN_INDEX] = malloc(sizeof(texture_t));
+	g_tex_scores[PADDLE_AI_INDEX] = malloc(sizeof(texture_t));
+	g_tex_startup_menu = malloc(sizeof(texture_t));
+	g_tex_pause_menu = malloc(sizeof(texture_t));
+	g_tex_game_over = malloc(sizeof(texture_t));
+	g_tex_game_won = malloc(sizeof(texture_t));
+
+	if (!game_load_texture_from_img(&g_tex_startup_menu, FILEPATH_STARTUP_MENU_IMAGE))
+	{
+		(void)fprintf(stderr, "Could not load main menu.\n");
+		return false;
+	}
+
+	if (!game_load_texture_from_img(&g_tex_pause_menu, FILEPATH_MENU_PAUSE_IMAGE))
+	{
+		(void)fprintf(stderr, "Could not load pause menu.\n");
+		return false;
+	}
+
+	if (!game_load_texture_from_img(&g_tex_game_over, FILEPATH_GAME_OVER_IMAGE))
+	{
+		(void)fprintf(stderr, "Could not load pause menu.\n");
+		return false;
+	}
+
+	if (!game_load_texture_from_img(&g_tex_game_won, FILEPATH_GAME_WON_IMAGE))
+	{
+		(void)fprintf(stderr, "Could not load pause menu.\n");
+		return false;
+	}
 
 	game_set_initial_positions();
 
@@ -171,7 +190,7 @@ game_init(void)
 static void
 game_close(void)
 {
-	for (size_t i = 0; i < NUM_PADDLES; ++i)
+	for (size_t i = 0; i < PADDLE_TOTAL; ++i)
 	{
 		SDL_DestroyTexture(g_tex_scores[i]->texture);
 		g_tex_scores[i]->texture = 0;
@@ -182,57 +201,27 @@ game_close(void)
 	TTF_CloseFont(g_font);
 	g_font = 0;
 
-	SDL_DestroyTexture(g_tex_pause_menu.texture);
-	g_tex_pause_menu.texture = 0;
+	SDL_DestroyTexture(g_tex_pause_menu->texture);
+	g_tex_pause_menu->texture = 0;
+	free(g_tex_pause_menu);
 
-	SDL_DestroyTexture(g_tex_startup_menu.texture);
-	g_tex_startup_menu.texture = 0;
+	SDL_DestroyTexture(g_tex_startup_menu->texture);
+	g_tex_startup_menu->texture = 0;
+	free(g_tex_startup_menu);
+
+	SDL_DestroyTexture(g_tex_game_over->texture);
+	g_tex_game_over->texture = 0;
+	free(g_tex_game_over);
+
+	SDL_DestroyTexture(g_tex_game_won->texture);
+	g_tex_game_won->texture = 0;
+	free(g_tex_game_won);
 
 	SDL_DestroyRenderer(g_renderer);
 	g_renderer = 0;
 
 	SDL_DestroyWindow(g_window);
 	g_window = 0;
-}
-
-static bool
-game_load_main_menu(void)
-{
-	SDL_Surface *s = IMG_Load("menu.png");
-
-	if (!s)
-	{
-		debug_print("Could not load menu: %s.\n", IMG_GetError());
-		return false;
-	}
-
-	g_tex_startup_menu.texture = SDL_CreateTextureFromSurface(g_renderer, s);
-
-	SDL_QueryTexture(g_tex_startup_menu.texture, 0, 0, &g_tex_startup_menu.width, &g_tex_startup_menu.height);
-
-	SDL_FreeSurface(s);
-
-	return g_tex_startup_menu.texture != 0;
-}
-
-static bool
-game_load_pause_menu(void)
-{
-	SDL_Surface *s = IMG_Load("pause_menu.png");
-
-	if (!s)
-	{
-		debug_print("Could not pause menu: %s.\n", IMG_GetError());
-		return false;
-	}
-
-	g_tex_pause_menu.texture = SDL_CreateTextureFromSurface(g_renderer, s);
-
-	SDL_QueryTexture(g_tex_pause_menu.texture, 0, 0, &g_tex_pause_menu.width, &g_tex_pause_menu.height);
-
-	SDL_FreeSurface(s);
-
-	return g_tex_pause_menu.texture != 0;
 }
 
 static void
@@ -275,8 +264,8 @@ game_loop(void)
 static void
 game_draw_menu(void)
 {
-	SDL_Rect render_quad = {0, 0, g_tex_startup_menu.width, g_tex_startup_menu.height};
-	SDL_RenderCopy(g_renderer, g_tex_startup_menu.texture, 0, &render_quad);
+	SDL_Rect render_quad = {0, 0, g_tex_startup_menu->width, g_tex_startup_menu->height};
+	SDL_RenderCopy(g_renderer, g_tex_startup_menu->texture, 0, &render_quad);
 }
 
 static void
@@ -302,6 +291,9 @@ game_handle_input(SDL_Event *event, bool *quit)
 			case GAME_STATUS_PLAYING:
 				game_handle_input_playing(event);
 				break;
+			case GAME_STATUS_GAME_OVER:
+			case GAME_STATUS_GAME_WON:
+				game_handle_input_game_ended(event);
 			}
 		}
 	}
@@ -327,6 +319,12 @@ game_render(void)
 		game_draw_net();
 		game_draw_scores();
 		break;
+	case GAME_STATUS_GAME_OVER:
+		game_draw_game_over();
+		break;
+	case GAME_STATUS_GAME_WON:
+		game_draw_game_won();
+		break;
 	}
 	SDL_SetRenderDrawColor(g_renderer, 0x00, 0x00, 0x00, 0x00);
 	SDL_RenderPresent(g_renderer);
@@ -337,7 +335,7 @@ game_draw_paddles(void)
 {
 	SDL_Rect src;
 
-	for (size_t i = 0; i < NUM_PADDLES; ++i)
+	for (size_t i = 0; i < PADDLE_TOTAL; ++i)
 	{
 		src.x = g_paddles[i].x;
 		src.y = g_paddles[i].y;
@@ -379,7 +377,7 @@ game_draw_net(void)
 static void
 game_update(void)
 {
-	for (size_t i = 0; i < NUM_PADDLES; ++i)
+	for (size_t i = 0; i < PADDLE_TOTAL; ++i)
 	{
 		g_paddles[i].y += g_paddles[i].dy;
 
@@ -396,18 +394,18 @@ game_update(void)
 	// Update AI.
 	if (g_ball.y < g_paddles[1].y)
 	{
-		g_paddles[AI_PADDLE_INDEX].dy = -PADDLE_CPU_SPEED;
+		g_paddles[PADDLE_AI_INDEX].dy = -PADDLE_CPU_SPEED;
 	}
 	else
 	{
-		g_paddles[AI_PADDLE_INDEX].dy = PADDLE_CPU_SPEED;
+		g_paddles[PADDLE_AI_INDEX].dy = PADDLE_CPU_SPEED;
 	}
 
 	g_ball.x += g_ball.dx;
 	g_ball.y += g_ball.dy;
 
 	// Check ball's collision with pads.
-	for (size_t i = 0; i < NUM_PADDLES; ++i)
+	for (size_t i = 0; i < PADDLE_TOTAL; ++i)
 	{
 		if (game_ball_collision_with_paddle(g_paddles[i]))
 		{
@@ -427,16 +425,18 @@ game_update(void)
 	// CPU scored.
 	if (g_ball.x < 0)
 	{
-		++g_scores[1];
+		++g_scores[PADDLE_AI_INDEX];
 		game_set_initial_positions();
 	}
 
 	// Human scored.
 	if (g_ball.x > WINDOW_WIDTH - g_ball.w)
 	{
-		++g_scores[0];
+		++g_scores[PADDLE_HUMAN_INDEX];
 		game_set_initial_positions();
 	}
+
+	game_check_win_condition();
 
 	// Bounce.
 	if (g_ball.y < 0 || g_ball.y > WINDOW_HEIGHT - g_ball.h)
@@ -446,34 +446,22 @@ game_update(void)
 }
 
 static void
-timer_start(p_timer_t *timer)
-{
-	timer->start_ticks = SDL_GetTicks64();
-}
-
-static Uint64
-timer_get_ticks(p_timer_t *timer)
-{
-	return SDL_GetTicks64() - timer->start_ticks;
-}
-
-static void
 game_set_initial_positions(void)
 {
 	{
-		g_paddles[HUMAN_PADDLE_INDEX].x = 0;
-		g_paddles[HUMAN_PADDLE_INDEX].y = WINDOW_HEIGHT / 2 - PADDLE_HEIGHT;
-		g_paddles[HUMAN_PADDLE_INDEX].w = PADDLE_WIDTH;
-		g_paddles[HUMAN_PADDLE_INDEX].h = PADDLE_HEIGHT;
-		g_paddles[HUMAN_PADDLE_INDEX].dy = PADDLE_HUMAN_SPEED;
+		g_paddles[PADDLE_HUMAN_INDEX].x = 0;
+		g_paddles[PADDLE_HUMAN_INDEX].y = WINDOW_HEIGHT / 2 - PADDLE_HEIGHT;
+		g_paddles[PADDLE_HUMAN_INDEX].w = PADDLE_WIDTH;
+		g_paddles[PADDLE_HUMAN_INDEX].h = PADDLE_HEIGHT;
+		g_paddles[PADDLE_HUMAN_INDEX].dy = PADDLE_HUMAN_SPEED;
 	}
 
 	{
-		g_paddles[AI_PADDLE_INDEX].x = WINDOW_WIDTH - PADDLE_WIDTH;
-		g_paddles[AI_PADDLE_INDEX].y = WINDOW_HEIGHT / 2 - PADDLE_HEIGHT;
-		g_paddles[AI_PADDLE_INDEX].w = PADDLE_WIDTH;
-		g_paddles[AI_PADDLE_INDEX].h = PADDLE_HEIGHT;
-		g_paddles[AI_PADDLE_INDEX].dy = PADDLE_CPU_SPEED;
+		g_paddles[PADDLE_AI_INDEX].x = WINDOW_WIDTH - PADDLE_WIDTH;
+		g_paddles[PADDLE_AI_INDEX].y = WINDOW_HEIGHT / 2 - PADDLE_HEIGHT;
+		g_paddles[PADDLE_AI_INDEX].w = PADDLE_WIDTH;
+		g_paddles[PADDLE_AI_INDEX].h = PADDLE_HEIGHT;
+		g_paddles[PADDLE_AI_INDEX].dy = PADDLE_CPU_SPEED;
 	}
 
 	{
@@ -481,7 +469,16 @@ game_set_initial_positions(void)
 		g_ball.y = WINDOW_HEIGHT / 2 - BALL_HEIGHT;
 		g_ball.w = BALL_WIDTH;
 		g_ball.h = BALL_HEIGHT;
-		g_ball.dx = -1;
+
+		if (g_scores[PADDLE_HUMAN_INDEX] > g_scores[PADDLE_AI_INDEX])
+		{
+			g_ball.dx = 1;
+		}
+		else
+		{
+			g_ball.dx = -1;
+		}
+
 		g_ball.dy = BALL_SPEED;
 	}
 }
@@ -518,13 +515,13 @@ game_handle_input_playing(SDL_Event *event)
 static void
 game_update_player_pad(pad_direction direction)
 {
-	if (direction == PAD_GO_UP && g_paddles[HUMAN_PADDLE_INDEX].dy > 0)
+	if (direction == PAD_GO_UP && g_paddles[PADDLE_HUMAN_INDEX].dy > 0)
 	{
-		g_paddles[HUMAN_PADDLE_INDEX].dy = -g_paddles[HUMAN_PADDLE_INDEX].dy;
+		g_paddles[PADDLE_HUMAN_INDEX].dy = -g_paddles[PADDLE_HUMAN_INDEX].dy;
 	}
-	else if (direction == PAD_GO_DOWN && g_paddles[HUMAN_PADDLE_INDEX].dy < 0)
+	else if (direction == PAD_GO_DOWN && g_paddles[PADDLE_HUMAN_INDEX].dy < 0)
 	{
-		g_paddles[HUMAN_PADDLE_INDEX].dy = abs(g_paddles[HUMAN_PADDLE_INDEX].dy);
+		g_paddles[PADDLE_HUMAN_INDEX].dy = abs(g_paddles[PADDLE_HUMAN_INDEX].dy);
 	}
 }
 
@@ -540,8 +537,8 @@ game_handle_input_paused(SDL_Event *event)
 static void
 game_draw_pause_menu(void)
 {
-	SDL_Rect render_quad = {0, 0, g_tex_pause_menu.width, g_tex_pause_menu.height};
-	SDL_RenderCopy(g_renderer, g_tex_pause_menu.texture, 0, &render_quad);
+	SDL_Rect render_quad = {0, 0, g_tex_pause_menu->width, g_tex_pause_menu->height};
+	SDL_RenderCopy(g_renderer, g_tex_pause_menu->texture, 0, &render_quad);
 }
 
 static bool
@@ -583,27 +580,27 @@ game_ball_collision_with_paddle(paddle_t paddle)
 static void
 game_draw_scores(void)
 {
-	char text[SCORE_TEXT_SIZE];
+	char text[SCOREBOARD_FONT_SIZE];
 	const SDL_Color white = {0xff, 0xff, 0xff, 0xff};
 
-	snprintf(text, SCORE_TEXT_SIZE, "%d", g_scores[HUMAN_PADDLE_INDEX]);
+	snprintf(text, SCOREBOARD_FONT_SIZE, "%d", g_scores[PADDLE_HUMAN_INDEX]);
 
-	if (game_load_texture_from_text(text, white, &g_tex_scores[HUMAN_PADDLE_INDEX]))
+	if (game_load_texture_from_text(text, white, &g_tex_scores[PADDLE_HUMAN_INDEX]))
 	{
-		SDL_Rect render_quad = {WINDOW_WIDTH * 0.25, 10, g_tex_scores[HUMAN_PADDLE_INDEX]->width, g_tex_scores[HUMAN_PADDLE_INDEX]->height};
-		SDL_RenderCopy(g_renderer, g_tex_scores[HUMAN_PADDLE_INDEX]->texture, 0, &render_quad);
+		SDL_Rect render_quad = {WINDOW_WIDTH * 0.25, 10, g_tex_scores[PADDLE_HUMAN_INDEX]->width, g_tex_scores[PADDLE_HUMAN_INDEX]->height};
+		SDL_RenderCopy(g_renderer, g_tex_scores[PADDLE_HUMAN_INDEX]->texture, 0, &render_quad);
 	}
 	else
 	{
 		debug_print("Could not load texture from player's score text.\n");
 	}
 
-	snprintf(text, SCORE_TEXT_SIZE, "%d", g_scores[AI_PADDLE_INDEX]);
+	snprintf(text, SCOREBOARD_FONT_SIZE, "%d", g_scores[PADDLE_AI_INDEX]);
 
-	if (game_load_texture_from_text(text, white, &g_tex_scores[AI_PADDLE_INDEX]))
+	if (game_load_texture_from_text(text, white, &g_tex_scores[PADDLE_AI_INDEX]))
 	{
-		SDL_Rect render_quad = {WINDOW_WIDTH * 0.75, 10, g_tex_scores[AI_PADDLE_INDEX]->width, g_tex_scores[AI_PADDLE_INDEX]->height};
-		SDL_RenderCopy(g_renderer, g_tex_scores[AI_PADDLE_INDEX]->texture, 0, &render_quad);
+		SDL_Rect render_quad = {WINDOW_WIDTH * 0.75, 10, g_tex_scores[PADDLE_AI_INDEX]->width, g_tex_scores[PADDLE_AI_INDEX]->height};
+		SDL_RenderCopy(g_renderer, g_tex_scores[PADDLE_AI_INDEX]->texture, 0, &render_quad);
 	}
 	else
 	{
@@ -642,4 +639,81 @@ game_load_texture_from_text(const char *text, SDL_Color colour, texture_t **t)
 	SDL_FreeSurface(surface);
 
 	return (*t)->texture != 0;
+}
+
+static bool
+game_load_texture_from_img(texture_t **t, const char *filepath)
+{
+	SDL_Surface *s = IMG_Load(filepath);
+
+	if (!s)
+	{
+		debug_print("Could not load menu: %s.\n", IMG_GetError());
+		return false;
+	}
+
+	(*t)->texture = SDL_CreateTextureFromSurface(g_renderer, s);
+
+	if (!(*t)->texture)
+	{
+		debug_print("Could not create texture from surface: %s.\n", SDL_GetError());
+	}
+
+	(*t)->width = s->w;
+	(*t)->height = s->h;
+
+	SDL_FreeSurface(s);
+
+	return (*t)->texture != 0;
+}
+
+static void
+game_handle_input_game_ended(SDL_Event *event)
+{
+	if (event->type == SDL_KEYDOWN && event->key.keysym.sym == SDLK_RETURN)
+	{
+		g_game_status = GAME_STATUS_PLAYING;
+	}
+}
+
+static void
+game_draw_game_over(void)
+{
+	SDL_Rect render_quad = {0, 0, g_tex_game_over->width, g_tex_game_over->height};
+	SDL_RenderCopy(g_renderer, g_tex_game_over->texture, 0, &render_quad);
+}
+
+static void
+game_draw_game_won(void)
+{
+	SDL_Rect render_quad = {0, 0, g_tex_game_won->width, g_tex_game_won->height};
+	SDL_RenderCopy(g_renderer, g_tex_game_won->texture, 0, &render_quad);
+}
+
+static void
+game_check_win_condition(void)
+{
+	bool end = false;
+
+	if (g_scores[PADDLE_HUMAN_INDEX] == SCOREBOARD_LIMIT)
+	{
+		g_game_status = GAME_STATUS_GAME_WON;
+		end = true;
+	}
+	else if (g_scores[PADDLE_AI_INDEX] == SCOREBOARD_LIMIT)
+	{
+		g_game_status = GAME_STATUS_GAME_OVER;
+		end = true;
+	}
+
+	if (end)
+	{
+		game_reset_scoreboard();
+	}
+}
+
+static void
+game_reset_scoreboard(void)
+{
+	g_scores[PADDLE_AI_INDEX] = g_scores[PADDLE_HUMAN_INDEX] = 0;
 }

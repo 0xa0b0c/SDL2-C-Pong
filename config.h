@@ -1,6 +1,0 @@
-#pragma once
-
-#define WINDOW_WIDTH 800
-#define WINDOW_HEIGHT 600
-#define WINDOW_FPS 120
-#define WINDOW_TICKS_PER_FRAME 1000 / WINDOW_FPS
