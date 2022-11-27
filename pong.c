@@ -53,6 +53,11 @@ typedef enum {
 	PAD_GO_DOWN
 } pad_direction;
 
+typedef enum {
+	BALL_MOVE_LEFT,
+	BALL_MOVE_RIGHT,
+} ball_x_direction;
+
 // Global Variables.
 static SDL_Window   *g_window = 0;
 static SDL_Renderer *g_renderer = 0;
@@ -87,6 +92,7 @@ static void game_render(void);
 static void game_update(void);
 static void game_set_initial_positions(void);
 static void game_update_player_pad(pad_direction);
+static bool game_ball_collision_with_paddle(paddle_t);
 
 // @TODO(lev): move somewhere else and declare extern.
 // Timer functions to manually cap fps.
@@ -131,9 +137,7 @@ main(void)
 static bool
 game_init(void)
 {
-	if (SDL_CreateWindowAndRenderer(WINDOW_WIDTH, WINDOW_HEIGHT,
-									SDL_WINDOW_MAXIMIZED, &g_window,
-									&g_renderer) < 0)
+	if (SDL_CreateWindowAndRenderer(WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_MAXIMIZED, &g_window, &g_renderer) < 0)
 	{
 		debug_print("Could not create SDL window/renderer: %s.\n", SDL_GetError());
 		return false;
@@ -276,29 +280,23 @@ static void
 game_render(void)
 {
 	SDL_RenderClear(g_renderer);
-
+	SDL_SetRenderDrawColor(g_renderer, 0xff, 0xff, 0xff, 0xff);
 	switch (g_game_status)
 	{
 	case GAME_STATUS_MAIN_MENU:
-		SDL_SetRenderDrawColor(g_renderer, 0xff, 0xff, 0xff, 0xff);
 		game_draw_menu();
-		SDL_SetRenderDrawColor(g_renderer, 0x00, 0x00, 0x00, 0x00);
 		break;
 	case GAME_STATUS_PAUSED:
-		SDL_SetRenderDrawColor(g_renderer, 0xff, 0xff, 0xff, 0xff);
 		game_draw_pause_menu();
-		SDL_SetRenderDrawColor(g_renderer, 0x00, 0x00, 0x00, 0x00);
 		break;
 	case GAME_STATUS_PLAYING:
 		game_update();
-		SDL_SetRenderDrawColor(g_renderer, 0xff, 0xff, 0xff, 0xff);
 		game_draw_paddles();
 		game_draw_ball();
 		game_draw_net();
-		SDL_SetRenderDrawColor(g_renderer, 0x00, 0x00, 0x00, 0x00);
 		break;
 	}
-
+	SDL_SetRenderDrawColor(g_renderer, 0x00, 0x00, 0x00, 0x00);
 	SDL_RenderPresent(g_renderer);
 }
 
@@ -364,7 +362,26 @@ game_update(void)
 	g_ball.x += g_ball.dx;
 	g_ball.y += g_ball.dy;
 
-	if (g_ball.x - g_ball.w < 0)
+	// Check ball's collision with pads.
+	for (size_t i = 0; i < NUM_PADDLES; ++i)
+	{
+		if (game_ball_collision_with_paddle(g_paddles[i]))
+		{
+			// @TODO(lev): refactor.
+			// Change direction.
+			if (g_ball.dx < 0)
+			{
+				g_ball.dx = 1;
+			}
+			else
+			{
+				g_ball.dx = -1;
+			}
+		}
+	}
+
+	// Someone scored.
+	if (g_ball.x < 0)
 	{
 		game_set_initial_positions();
 	}
@@ -374,6 +391,7 @@ game_update(void)
 		game_set_initial_positions();
 	}
 
+	// Bounce.
 	if (g_ball.y < 0 || g_ball.y > WINDOW_HEIGHT - g_ball.h)
 	{
 		g_ball.dy = -g_ball.dy;
@@ -416,7 +434,7 @@ game_set_initial_positions(void)
 		g_ball.y = WINDOW_HEIGHT / 2 - BALL_HEIGHT;
 		g_ball.w = BALL_WIDTH;
 		g_ball.h = BALL_HEIGHT;
-		g_ball.dx = 1;
+		g_ball.dx = -1;
 		g_ball.dy = 1;
 	}
 }
@@ -453,11 +471,11 @@ game_handle_input_playing(SDL_Event *event)
 static void
 game_update_player_pad(pad_direction direction)
 {
-	if (direction == PAD_GO_UP)
+	if (direction == PAD_GO_UP && g_paddles[0].dy > 0)
 	{
 		g_paddles[0].dy = -g_paddles[0].dy;
 	}
-	else
+	else if (direction == PAD_GO_DOWN && g_paddles[0].dy < 0)
 	{
 		g_paddles[0].dy = abs(g_paddles[0].dy);
 	}
@@ -477,4 +495,40 @@ game_draw_pause_menu(void)
 {
 	SDL_Rect render_quad = {0, 0, g_tex_pause_menu_width, g_tex_pause_menu_height};
 	SDL_RenderCopy(g_renderer, g_tex_pause_menu, 0, &render_quad);
+}
+
+static bool
+game_ball_collision_with_paddle(paddle_t paddle)
+{
+	const int left_a = paddle.x;
+	const int right_a = paddle.x + paddle.w;
+	const int top_a = paddle.y;
+	const int bottom_a = paddle.y + paddle.h;
+
+	const int left_b = g_ball.x;
+	const int right_b = g_ball.x + g_ball.w;
+	const int top_b = g_ball.y;
+	const int bottom_b = g_ball.y + g_ball.h;
+
+	if (bottom_a <= top_b)
+	{
+		return false;
+	}
+
+	if (top_a >= bottom_b)
+	{
+		return false;
+	}
+
+	if (right_a <= left_b)
+	{
+		return false;
+	}
+
+	if (left_a >= right_b)
+	{
+		return false;
+	}
+
+	return true;
 }
