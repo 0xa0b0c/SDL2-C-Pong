@@ -30,6 +30,14 @@
 extern bool subystem_init(void);
 extern void subsystem_close(void);
 
+enum {
+	TEXTURE_STARTUP_MENU_INDEX,
+	TEXTURE_PAUSE_MENU_INDEX,
+	TEXTURE_GAME_OVER_INDEX,
+	TEXTURE_GAME_WON_INDEX,
+	TEXTURE_COUNT
+} game_textures;
+
 // Types.
 typedef enum {
 	GAME_STATUS_MAIN_MENU,
@@ -70,10 +78,7 @@ typedef struct {
 // Global Variables.
 static SDL_Window   *g_window = 0;
 static SDL_Renderer *g_renderer = 0;
-static texture_t    *g_tex_startup_menu;
-static texture_t    *g_tex_pause_menu;
-static texture_t    *g_tex_game_over;
-static texture_t    *g_tex_game_won;
+static texture_t    *g_textures[TEXTURE_COUNT];
 static texture_t    *g_tex_scores[PADDLE_COUNT];
 static game_status_t g_game_status = GAME_STATUS_MAIN_MENU;
 static paddle_t      g_paddles[PADDLE_COUNT];
@@ -156,32 +161,37 @@ game_init(void)
 		return false;
 	}
 
-	g_tex_scores[PADDLE_HUMAN_INDEX] = malloc(sizeof(texture_t));
-	g_tex_scores[PADDLE_AI_INDEX] = malloc(sizeof(texture_t));
-	g_tex_startup_menu = malloc(sizeof(texture_t));
-	g_tex_pause_menu = malloc(sizeof(texture_t));
-	g_tex_game_over = malloc(sizeof(texture_t));
-	g_tex_game_won = malloc(sizeof(texture_t));
+	for (size_t i = 0; i < TEXTURE_COUNT; ++i)
+	{
+		g_textures[i] = malloc(sizeof(texture_t));
+		g_textures[i]->texture = 0;
+	}
 
-	if (!game_load_texture_from_img(&g_tex_startup_menu, FILEPATH_STARTUP_MENU_IMAGE))
+	g_tex_scores[PADDLE_HUMAN_INDEX] = malloc(sizeof(texture_t));
+	g_tex_scores[PADDLE_HUMAN_INDEX]->texture = 0;
+
+	g_tex_scores[PADDLE_AI_INDEX] = malloc(sizeof(texture_t));
+	g_tex_scores[PADDLE_AI_INDEX]->texture = 0;
+
+	if (!game_load_texture_from_img(&g_textures[TEXTURE_STARTUP_MENU_INDEX], FILEPATH_STARTUP_MENU_IMAGE))
 	{
 		(void)fprintf(stderr, "Could not load main menu.\n");
 		return false;
 	}
 
-	if (!game_load_texture_from_img(&g_tex_pause_menu, FILEPATH_MENU_PAUSE_IMAGE))
+	if (!game_load_texture_from_img(&g_textures[TEXTURE_PAUSE_MENU_INDEX], FILEPATH_MENU_PAUSE_IMAGE))
 	{
 		(void)fprintf(stderr, "Could not load pause menu.\n");
 		return false;
 	}
 
-	if (!game_load_texture_from_img(&g_tex_game_over, FILEPATH_GAME_OVER_IMAGE))
+	if (!game_load_texture_from_img(&g_textures[TEXTURE_GAME_OVER_INDEX], FILEPATH_GAME_OVER_IMAGE))
 	{
 		(void)fprintf(stderr, "Could not load pause menu.\n");
 		return false;
 	}
 
-	if (!game_load_texture_from_img(&g_tex_game_won, FILEPATH_GAME_WON_IMAGE))
+	if (!game_load_texture_from_img(&g_textures[TEXTURE_GAME_WON_INDEX], FILEPATH_GAME_WON_IMAGE))
 	{
 		(void)fprintf(stderr, "Could not load pause menu.\n");
 		return false;
@@ -206,21 +216,12 @@ game_close(void)
 	TTF_CloseFont(g_font);
 	g_font = 0;
 
-	SDL_DestroyTexture(g_tex_pause_menu->texture);
-	g_tex_pause_menu->texture = 0;
-	free(g_tex_pause_menu);
-
-	SDL_DestroyTexture(g_tex_startup_menu->texture);
-	g_tex_startup_menu->texture = 0;
-	free(g_tex_startup_menu);
-
-	SDL_DestroyTexture(g_tex_game_over->texture);
-	g_tex_game_over->texture = 0;
-	free(g_tex_game_over);
-
-	SDL_DestroyTexture(g_tex_game_won->texture);
-	g_tex_game_won->texture = 0;
-	free(g_tex_game_won);
+	for (size_t i = 0; i < TEXTURE_COUNT; ++i)
+	{
+		SDL_DestroyTexture(g_textures[i]->texture);
+		g_textures[i]->texture = 0;
+		free(g_textures[i]);
+	}
 
 	SDL_DestroyRenderer(g_renderer);
 	g_renderer = 0;
@@ -305,10 +306,10 @@ game_render(void)
 	switch (g_game_status)
 	{
 	case GAME_STATUS_MAIN_MENU:
-		game_draw_texture(g_tex_startup_menu);
+		game_draw_texture(g_textures[TEXTURE_STARTUP_MENU_INDEX]);
 		break;
 	case GAME_STATUS_PAUSED:
-		game_draw_texture(g_tex_pause_menu);
+		game_draw_texture(g_textures[TEXTURE_PAUSE_MENU_INDEX]);
 		break;
 	case GAME_STATUS_PLAYING:
 		game_update();
@@ -318,10 +319,10 @@ game_render(void)
 		game_draw_scores();
 		break;
 	case GAME_STATUS_GAME_OVER:
-		game_draw_texture(g_tex_game_over);
+		game_draw_texture(g_textures[TEXTURE_GAME_OVER_INDEX]);
 		break;
 	case GAME_STATUS_GAME_WON:
-		game_draw_texture(g_tex_game_won);
+		game_draw_texture(g_textures[TEXTURE_GAME_WON_INDEX]);
 		break;
 	}
 	SDL_SetRenderDrawColor(g_renderer, 0x00, 0x00, 0x00, 0x00);

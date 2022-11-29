@@ -2,8 +2,8 @@ SHELL = /bin/sh
 CC = cc
 WARN = -Wall -Wextra -pedantic -Werror
 DEBUG = -ggdb -DDEBUG
-RELEASE = -O3
-CFLAGS = -std=c99 $(RELEASE) $(WARN)
+RELEASE = -O3 -DNDEBUG
+CFLAGS = -std=c99 $(DEBUG) $(WARN)
 LDFLAGS = -lSDL2 -lSDL2_image -lSDL2_ttf
 
 all: kesman
