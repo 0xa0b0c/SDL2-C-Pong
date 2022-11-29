@@ -35,6 +35,9 @@ enum {
 	TEXTURE_PAUSE_MENU_INDEX,
 	TEXTURE_GAME_OVER_INDEX,
 	TEXTURE_GAME_WON_INDEX,
+	TEXTURE_SCOREBOARD_HUMAN,
+	TEXTURE_SCOREBOARD_AI,
+
 	TEXTURE_COUNT
 } game_textures;
 
@@ -79,7 +82,6 @@ typedef struct {
 static SDL_Window   *g_window = 0;
 static SDL_Renderer *g_renderer = 0;
 static texture_t    *g_textures[TEXTURE_COUNT];
-static texture_t    *g_tex_scores[PADDLE_COUNT];
 static game_status_t g_game_status = GAME_STATUS_MAIN_MENU;
 static paddle_t      g_paddles[PADDLE_COUNT];
 static ball_t        g_ball;
@@ -167,12 +169,6 @@ game_init(void)
 		g_textures[i]->texture = 0;
 	}
 
-	g_tex_scores[PADDLE_HUMAN_INDEX] = malloc(sizeof(texture_t));
-	g_tex_scores[PADDLE_HUMAN_INDEX]->texture = 0;
-
-	g_tex_scores[PADDLE_AI_INDEX] = malloc(sizeof(texture_t));
-	g_tex_scores[PADDLE_AI_INDEX]->texture = 0;
-
 	if (!game_load_texture_from_img(&g_textures[TEXTURE_STARTUP_MENU_INDEX], FILEPATH_STARTUP_MENU_IMAGE))
 	{
 		(void)fprintf(stderr, "Could not load main menu.\n");
@@ -205,14 +201,6 @@ game_init(void)
 static void
 game_close(void)
 {
-	for (size_t i = 0; i < PADDLE_COUNT; ++i)
-	{
-		SDL_DestroyTexture(g_tex_scores[i]->texture);
-		g_tex_scores[i]->texture = 0;
-		free(g_tex_scores[i]);
-	}
-
-
 	TTF_CloseFont(g_font);
 	g_font = 0;
 
@@ -576,10 +564,10 @@ game_draw_scores(void)
 
 	snprintf(text, SCOREBOARD_FONT_SIZE, "%d", g_scores[PADDLE_HUMAN_INDEX]);
 
-	if (game_load_texture_from_text(text, white, &g_tex_scores[PADDLE_HUMAN_INDEX]))
+	if (game_load_texture_from_text(text, white, &g_textures[TEXTURE_SCOREBOARD_HUMAN]))
 	{
-		SDL_Rect render_quad = {WINDOW_WIDTH * 0.25, 10, g_tex_scores[PADDLE_HUMAN_INDEX]->width, g_tex_scores[PADDLE_HUMAN_INDEX]->height};
-		SDL_RenderCopy(g_renderer, g_tex_scores[PADDLE_HUMAN_INDEX]->texture, 0, &render_quad);
+		SDL_Rect render_quad = {WINDOW_WIDTH * 0.25, 10, g_textures[TEXTURE_SCOREBOARD_HUMAN]->width, g_textures[TEXTURE_SCOREBOARD_HUMAN]->height};
+		SDL_RenderCopy(g_renderer, g_textures[TEXTURE_SCOREBOARD_HUMAN]->texture, 0, &render_quad);
 	}
 	else
 	{
@@ -588,10 +576,10 @@ game_draw_scores(void)
 
 	snprintf(text, SCOREBOARD_FONT_SIZE, "%d", g_scores[PADDLE_AI_INDEX]);
 
-	if (game_load_texture_from_text(text, white, &g_tex_scores[PADDLE_AI_INDEX]))
+	if (game_load_texture_from_text(text, white, &g_textures[TEXTURE_SCOREBOARD_AI]))
 	{
-		SDL_Rect render_quad = {WINDOW_WIDTH * 0.75, 10, g_tex_scores[PADDLE_AI_INDEX]->width, g_tex_scores[PADDLE_AI_INDEX]->height};
-		SDL_RenderCopy(g_renderer, g_tex_scores[PADDLE_AI_INDEX]->texture, 0, &render_quad);
+		SDL_Rect render_quad = {WINDOW_WIDTH * 0.75, 10, g_textures[TEXTURE_SCOREBOARD_AI]->width, g_textures[TEXTURE_SCOREBOARD_AI]->height};
+		SDL_RenderCopy(g_renderer, g_textures[TEXTURE_SCOREBOARD_AI]->texture, 0, &render_quad);
 	}
 	else
 	{
