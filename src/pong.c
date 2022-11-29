@@ -39,7 +39,7 @@ enum {
 	TEXTURE_SCOREBOARD_AI,
 
 	TEXTURE_COUNT
-} game_textures;
+} game_textures_indices;
 
 // Types.
 typedef enum {
