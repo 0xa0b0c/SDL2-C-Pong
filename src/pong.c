@@ -24,7 +24,7 @@
 
 #define SCOREBOARD_FONT_SIZE 28
 #define SCOREBOARD_TEXT_SIZE 32
-#define SCOREBOARD_LIMIT 1
+#define SCOREBOARD_LIMIT 5
 
 // SDL Stuff.
 extern bool subystem_init(void);
@@ -87,10 +87,7 @@ static void game_close(void);
 static bool game_load_texture_from_img(texture_t **, const char *);
 static void game_loop(void);
 
-static void game_draw_menu(void);
-static void game_draw_pause_menu(void);
-static void game_draw_game_over(void);
-static void game_draw_game_won(void);
+static void game_draw_texture(texture_t *);
 static void game_draw_paddles(void);
 static void game_draw_ball(void);
 static void game_draw_net(void);
@@ -270,13 +267,6 @@ game_loop(void)
 }
 
 static void
-game_draw_menu(void)
-{
-	SDL_Rect render_quad = {0, 0, g_tex_startup_menu->width, g_tex_startup_menu->height};
-	SDL_RenderCopy(g_renderer, g_tex_startup_menu->texture, 0, &render_quad);
-}
-
-static void
 game_handle_input(SDL_Event *event, bool *quit)
 {
 	while (SDL_PollEvent(event))
@@ -315,10 +305,10 @@ game_render(void)
 	switch (g_game_status)
 	{
 	case GAME_STATUS_MAIN_MENU:
-		game_draw_menu();
+		game_draw_texture(g_tex_startup_menu);
 		break;
 	case GAME_STATUS_PAUSED:
-		game_draw_pause_menu();
+		game_draw_texture(g_tex_pause_menu);
 		break;
 	case GAME_STATUS_PLAYING:
 		game_update();
@@ -328,10 +318,10 @@ game_render(void)
 		game_draw_scores();
 		break;
 	case GAME_STATUS_GAME_OVER:
-		game_draw_game_over();
+		game_draw_texture(g_tex_game_over);
 		break;
 	case GAME_STATUS_GAME_WON:
-		game_draw_game_won();
+		game_draw_texture(g_tex_game_won);
 		break;
 	}
 	SDL_SetRenderDrawColor(g_renderer, 0x00, 0x00, 0x00, 0x00);
@@ -541,13 +531,6 @@ game_handle_input_paused(SDL_Event *event)
 	}
 }
 
-static void
-game_draw_pause_menu(void)
-{
-	SDL_Rect render_quad = {0, 0, g_tex_pause_menu->width, g_tex_pause_menu->height};
-	SDL_RenderCopy(g_renderer, g_tex_pause_menu->texture, 0, &render_quad);
-}
-
 static bool
 game_ball_collision_with_paddle(paddle_t paddle)
 {
@@ -684,20 +667,6 @@ game_handle_input_game_ended(SDL_Event *event)
 }
 
 static void
-game_draw_game_over(void)
-{
-	SDL_Rect render_quad = {0, 0, g_tex_game_over->width, g_tex_game_over->height};
-	SDL_RenderCopy(g_renderer, g_tex_game_over->texture, 0, &render_quad);
-}
-
-static void
-game_draw_game_won(void)
-{
-	SDL_Rect render_quad = {0, 0, g_tex_game_won->width, g_tex_game_won->height};
-	SDL_RenderCopy(g_renderer, g_tex_game_won->texture, 0, &render_quad);
-}
-
-static void
 game_check_win_condition(void)
 {
 	bool end = false;
@@ -723,4 +692,11 @@ static void
 game_reset_scoreboard(void)
 {
 	g_scores[PADDLE_AI_INDEX] = g_scores[PADDLE_HUMAN_INDEX] = 0;
+}
+
+static void
+game_draw_texture(texture_t *t)
+{
+	SDL_Rect render_quad = {0, 0, t->width, t->height};
+	SDL_RenderCopy(g_renderer, t->texture, 0, &render_quad);
 }
