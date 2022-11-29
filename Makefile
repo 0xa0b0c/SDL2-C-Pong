@@ -6,6 +6,7 @@ RELEASE = -O3 -DNDEBUG
 CFLAGS = -std=c99 $(DEBUG) $(WARN)
 LDFLAGS = -lSDL2 -lSDL2_image -lSDL2_ttf
 
+# If you don't want to do static analysis, just remove the prerequisite `kesman`.
 all: kesman
 	mkdir -p out
 	$(CC) -$(CFLAGS) -o out/pong src/pong.c src/subsystem.c src/timer.c $(LDFLAGS)
