@@ -1,6 +1,6 @@
 SHELL = /bin/sh
 CC = cc
-WARN = -Wall -Wextra -pedantic -Werror
+WARN = -Wall -Wextra -pedantic -Werror -march=native
 DEBUG = -ggdb -DDEBUG
 RELEASE = -O3 -DNDEBUG
 CFLAGS = -std=c99 $(DEBUG) $(WARN)

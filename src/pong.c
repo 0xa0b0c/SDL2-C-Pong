@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <math.h>
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
@@ -14,13 +15,15 @@
 #define PADDLE_WIDTH 10
 #define PADDLE_HEIGHT 50
 #define PADDLE_HUMAN_SPEED 2
-#define PADDLE_CPU_SPEED 1
+#define PADDLE_CPU_SPEED 2
 #define PADDLE_HUMAN_INDEX 0
 #define PADDLE_AI_INDEX 1
 
 #define BALL_WIDTH 10
 #define BALL_HEIGHT 10
-#define BALL_SPEED 2
+#define BALL_X_SPEED 2
+#define BALL_X_SPEED_BONUS 1
+#define BALL_X_SPEED_LIMIT 4
 
 #define SCOREBOARD_FONT_SIZE 28
 #define SCOREBOARD_TEXT_SIZE 32
@@ -29,6 +32,13 @@
 // SDL Stuff.
 extern bool subystem_init(void);
 extern void subsystem_close(void);
+
+enum {
+	BALL_Y_SPEED_0, // unused
+	BALL_Y_SPEED_1,
+	BALL_Y_SPEED_2,
+	BALL_Y_SPEED_3,
+} ball_y_speed;
 
 enum {
 	TEXTURE_STARTUP_MENU_INDEX,
@@ -92,7 +102,10 @@ static TTF_Font     *g_font;
 static bool game_init(void);
 static void game_close(void);
 static bool game_load_texture_from_img(texture_t **, const char *);
+static int  game_clamp(int, int, int);
 static void game_loop(void);
+static void game_render(void);
+static void game_update(void);
 
 static void game_draw_texture(texture_t *);
 static void game_draw_paddles(void);
@@ -106,14 +119,13 @@ static void game_handle_input_playing(SDL_Event *);
 static void game_handle_input_paused(SDL_Event *);
 static void game_handle_input_game_ended(SDL_Event *);
 
-static void game_render(void);
-static void game_update(void);
 static void game_set_initial_positions(void);
 static void game_reset_scoreboard(void);
 static void game_update_player_pad(pad_direction_t);
 static bool game_ball_collision_with_paddle(paddle_t);
 static bool game_load_texture_from_text(const char *, SDL_Color, texture_t **);
 static void game_check_win_condition(void);
+static int  game_get_ball_y_speed(void);
 
 int
 main(void)
@@ -379,7 +391,7 @@ game_update(void)
 	}
 
 	// Update AI.
-	if (g_ball.y < g_paddles[1].y)
+	if (g_ball.y < g_paddles[PADDLE_AI_INDEX].y)
 	{
 		g_paddles[PADDLE_AI_INDEX].dy = -PADDLE_CPU_SPEED;
 	}
@@ -396,29 +408,28 @@ game_update(void)
 	{
 		if (game_ball_collision_with_paddle(g_paddles[i]))
 		{
-			// @TODO(lev): refactor.
 			// Change direction.
 			if (g_ball.dx < 0)
 			{
-				g_ball.dx = 1;
+				g_ball.dx = game_clamp(BALL_X_SPEED_BONUS + -(g_ball.dx), BALL_X_SPEED, BALL_X_SPEED_LIMIT);
 			}
 			else
 			{
-				g_ball.dx = -1;
+				g_ball.dx = -(game_clamp(BALL_X_SPEED_BONUS + g_ball.dx, BALL_X_SPEED, BALL_X_SPEED_LIMIT));
 			}
+			g_ball.dy = game_get_ball_y_speed();
 		}
 	}
 
-	// CPU scored.
 	if (g_ball.x < 0)
 	{
+		// CPU scored.
 		++g_scores[PADDLE_AI_INDEX];
 		game_set_initial_positions();
 	}
-
-	// Human scored.
-	if (g_ball.x > WINDOW_WIDTH - g_ball.w)
+	else if (g_ball.x > WINDOW_WIDTH - g_ball.w)
 	{
+		// Human scored.
 		++g_scores[PADDLE_HUMAN_INDEX];
 		game_set_initial_positions();
 	}
@@ -453,11 +464,11 @@ game_set_initial_positions(void)
 
 	if (g_scores[PADDLE_HUMAN_INDEX] > g_scores[PADDLE_AI_INDEX])
 	{
-		g_ball.dx = 1;
+		g_ball.dx = BALL_X_SPEED;
 	}
 	else
 	{
-		g_ball.dx = -1;
+		g_ball.dx = -BALL_X_SPEED;
 	}
 
 	{
@@ -465,7 +476,7 @@ game_set_initial_positions(void)
 		g_ball.y = WINDOW_HEIGHT / 2 - BALL_HEIGHT;
 		g_ball.w = BALL_WIDTH;
 		g_ball.h = BALL_HEIGHT;
-		g_ball.dy = BALL_SPEED;
+		g_ball.dy = BALL_Y_SPEED_1;
 	}
 }
 
@@ -688,4 +699,22 @@ game_draw_texture(texture_t *t)
 {
 	SDL_Rect render_quad = {0, 0, t->width, t->height};
 	SDL_RenderCopy(g_renderer, t->texture, 0, &render_quad);
+}
+
+static int
+game_clamp(int n, int min, int max)
+{
+	const int t = n < min ? min : n;
+	return t > max ? max : t;
+}
+
+static int
+game_get_ball_y_speed(void)
+{
+	if (g_ball.dy == BALL_Y_SPEED_3)
+	{
+		return BALL_Y_SPEED_1;
+	}
+
+	return g_ball.dy + 1;
 }
