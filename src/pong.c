@@ -1,4 +1,3 @@
-#include <SDL2/SDL_render.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -11,7 +10,7 @@
 #include "timer.h"
 
 // Constants.
-#define PADDLE_TOTAL 2
+#define PADDLE_COUNT 2
 #define PADDLE_WIDTH 10
 #define PADDLE_HEIGHT 50
 #define PADDLE_HUMAN_SPEED 2
@@ -60,7 +59,7 @@ typedef struct {
 typedef enum {
 	PAD_GO_UP,
 	PAD_GO_DOWN
-} pad_direction;
+} pad_direction_t;
 
 typedef struct {
 	SDL_Texture *texture;
@@ -75,11 +74,11 @@ static texture_t    *g_tex_startup_menu;
 static texture_t    *g_tex_pause_menu;
 static texture_t    *g_tex_game_over;
 static texture_t    *g_tex_game_won;
-static texture_t    *g_tex_scores[PADDLE_TOTAL];
+static texture_t    *g_tex_scores[PADDLE_COUNT];
 static game_status_t g_game_status = GAME_STATUS_MAIN_MENU;
-static paddle_t      g_paddles[PADDLE_TOTAL];
+static paddle_t      g_paddles[PADDLE_COUNT];
 static ball_t        g_ball;
-static int           g_scores[PADDLE_TOTAL];
+static int           g_scores[PADDLE_COUNT];
 static TTF_Font     *g_font;
 
 // Game Functions.
@@ -107,7 +106,7 @@ static void game_render(void);
 static void game_update(void);
 static void game_set_initial_positions(void);
 static void game_reset_scoreboard(void);
-static void game_update_player_pad(pad_direction);
+static void game_update_player_pad(pad_direction_t);
 static bool game_ball_collision_with_paddle(paddle_t);
 static bool game_load_texture_from_text(const char *, SDL_Color, texture_t **);
 static void game_check_win_condition(void);
@@ -120,13 +119,11 @@ main(void)
 
 	if (!subystem_init())
 	{
-		(void)fprintf(stdout, "Could not initialize game's subystems.\n");
 		exit(EXIT_FAILURE);
 	}
 
 	if (!game_init())
 	{
-		(void)fprintf(stdout, "Could not initialize game.\n");
 		exit(EXIT_FAILURE);
 	}
 
@@ -138,7 +135,7 @@ main(void)
 static bool
 game_init(void)
 {
-	g_window = SDL_CreateWindow("Pong with SDL2!", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_MAXIMIZED);
+	g_window = SDL_CreateWindow(WINDOW_TITLE, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_MAXIMIZED);
 
 	if (!g_window)
 	{
@@ -201,7 +198,7 @@ game_init(void)
 static void
 game_close(void)
 {
-	for (size_t i = 0; i < PADDLE_TOTAL; ++i)
+	for (size_t i = 0; i < PADDLE_COUNT; ++i)
 	{
 		SDL_DestroyTexture(g_tex_scores[i]->texture);
 		g_tex_scores[i]->texture = 0;
@@ -346,7 +343,7 @@ game_draw_paddles(void)
 {
 	SDL_Rect src;
 
-	for (size_t i = 0; i < PADDLE_TOTAL; ++i)
+	for (size_t i = 0; i < PADDLE_COUNT; ++i)
 	{
 		src.x = g_paddles[i].x;
 		src.y = g_paddles[i].y;
@@ -388,7 +385,7 @@ game_draw_net(void)
 static void
 game_update(void)
 {
-	for (size_t i = 0; i < PADDLE_TOTAL; ++i)
+	for (size_t i = 0; i < PADDLE_COUNT; ++i)
 	{
 		g_paddles[i].y += g_paddles[i].dy;
 
@@ -416,7 +413,7 @@ game_update(void)
 	g_ball.y += g_ball.dy;
 
 	// Check ball's collision with pads.
-	for (size_t i = 0; i < PADDLE_TOTAL; ++i)
+	for (size_t i = 0; i < PADDLE_COUNT; ++i)
 	{
 		if (game_ball_collision_with_paddle(g_paddles[i]))
 		{
@@ -523,7 +520,7 @@ game_handle_input_playing(SDL_Event *event)
 }
 
 static void
-game_update_player_pad(pad_direction direction)
+game_update_player_pad(pad_direction_t direction)
 {
 	if (direction == PAD_GO_UP && g_paddles[PADDLE_HUMAN_INDEX].dy > 0)
 	{

@@ -4,6 +4,7 @@
 #define WINDOW_HEIGHT 600
 #define WINDOW_FPS 120
 #define WINDOW_TICKS_PER_FRAME 1000 / WINDOW_FPS
+#define WINDOW_TITLE "Pong with SDL2!"
 
 #define FILEPATH_STARTUP_MENU_IMAGE "assets/imgs/menu_main.png"
 #define FILEPATH_MENU_PAUSE_IMAGE "assets/imgs/menu_pause.png"
