@@ -10,6 +10,7 @@ I hope you find something useful in my code but please, be careful, I just start
 - SDL2
 - SDL2_image
 - SDL2_ttf
+- SDL2_mixer
 - cppcheck (you can skip this, please read comments in Makefile)
 
 # Installation
@@ -21,3 +22,8 @@ git clone https://github.com/0xa0b0c/SDL2-C-Pong.git
 cd SDL2-C-Pong
 make && make run
 ```
+
+# "Features"
+
+- Sound.
+- Startup and pause screen.

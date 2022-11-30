@@ -2,9 +2,11 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <math.h>
+
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
 #include <SDL2/SDL_ttf.h>
+#include <SDL2/SDL_mixer.h>
 
 #include "config.h"
 #include "debug.h"
@@ -96,35 +98,37 @@ static paddle_t      g_paddles[PADDLE_COUNT];
 static ball_t        g_ball;
 static int           g_scores[PADDLE_COUNT];
 static TTF_Font     *g_font;
+static Mix_Music    *g_snd_bg_music;
+static Mix_Chunk    *g_snd_pad_hit;
 
 // Game Functions.
-static bool game_init(void);
-static void game_close(void);
-static bool game_load_texture_from_img(texture_t **, const char *);
-static int  game_clamp(int, int, int);
-static void game_loop(void);
-static void game_render(void);
-static void game_update(void);
+static bool  game_init(void);
+static void  game_close(void);
+static bool  game_load_texture_from_img(texture_t **, const char *);
+static int   game_clamp(int, int, int);
+static void  game_loop(void);
+static void  game_render(void);
+static void  game_update(void);
 
-static void game_draw_texture(texture_t *);
-static void game_draw_paddles(void);
-static void game_draw_ball(void);
-static void game_draw_net(void);
-static void game_draw_scores(void);
+static void  game_draw_texture(texture_t *);
+static void  game_draw_paddles(void);
+static void  game_draw_ball(void);
+static void  game_draw_net(void);
+static void  game_draw_scores(void);
 
-static void game_handle_input(SDL_Event *, bool *);
-static void game_handle_input_main_menu(SDL_Event *);
-static void game_handle_input_playing(SDL_Event *);
-static void game_handle_input_paused(SDL_Event *);
-static void game_handle_input_game_ended(SDL_Event *);
+static void  game_handle_input(SDL_Event *, bool *);
+static void  game_handle_input_main_menu(SDL_Event *);
+static void  game_handle_input_playing(SDL_Event *);
+static void  game_handle_input_paused(SDL_Event *);
+static void  game_handle_input_game_ended(SDL_Event *);
 
-static void game_set_initial_positions(void);
-static void game_reset_scoreboard(void);
-static void game_update_player_pad(pad_direction_t);
-static bool game_ball_collision_with_paddle(paddle_t);
-static bool game_load_texture_from_text(const char *, SDL_Color, texture_t **);
-static void game_check_win_condition(void);
-static int  game_get_ball_y_speed(void);
+static void  game_set_initial_positions(void);
+static void  game_reset_scoreboard(void);
+static void  game_update_player_pad(pad_direction_t);
+static bool  game_ball_collision_with_paddle(paddle_t);
+static bool  game_load_texture_from_text(const char *, SDL_Color, texture_t **);
+static void  game_check_win_condition(void);
+static int   game_get_ball_y_speed(void);
 
 int
 main(void)
@@ -141,6 +145,8 @@ main(void)
 	{
 		exit(EXIT_FAILURE);
 	}
+
+	Mix_PlayMusic(g_snd_bg_music, -1);
 
 	game_loop();
 
@@ -171,6 +177,31 @@ game_init(void)
 	if (!g_font)
 	{
 		(void)fprintf(stderr, "Could not open TTF Font: %s.\n", TTF_GetError());
+		return false;
+	}
+
+	g_snd_pad_hit = Mix_LoadWAV(FILEPATH_SND_PAD_HIT);
+
+	if (!g_snd_pad_hit)
+	{
+		(void)fprintf(stderr, "Could not open pad hit sound: %s.\n", Mix_GetError());
+		return false;
+	}
+
+	g_snd_bg_music = Mix_LoadMUS(FILEPATH_SND_BG);
+
+	if (!g_snd_bg_music)
+	{
+		(void)fprintf(stderr, "Could not open pad hit sound: %s.\n", Mix_GetError());
+		return false;
+	}
+
+	Mix_VolumeChunk(g_snd_pad_hit, SND_VOLUME);
+	Mix_VolumeMusic(SND_VOLUME);
+
+	if (!g_snd_pad_hit)
+	{
+		(void)fprintf(stderr, "Could not open pad hit sound: %s\n", Mix_GetError());
 		return false;
 	}
 
@@ -212,6 +243,12 @@ game_init(void)
 static void
 game_close(void)
 {
+	Mix_FreeMusic(g_snd_bg_music);
+	g_snd_bg_music = 0;
+
+	Mix_FreeChunk(g_snd_pad_hit);
+	g_snd_pad_hit = 0;
+
 	TTF_CloseFont(g_font);
 	g_font = 0;
 
@@ -416,7 +453,11 @@ game_update(void)
 			{
 				g_ball.dx = -(game_clamp(BALL_X_SPEED_BONUS + g_ball.dx, BALL_X_SPEED, BALL_X_SPEED_LIMIT));
 			}
+
 			g_ball.dy = game_get_ball_y_speed();
+
+			// Play sound hit.
+			Mix_PlayChannel(-1, g_snd_pad_hit, 0);
 		}
 	}
 

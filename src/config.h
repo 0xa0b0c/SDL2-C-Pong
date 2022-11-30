@@ -11,3 +11,7 @@
 #define FILEPATH_FONT "assets/fonts/ARCADECLASSIC.TTF"
 #define FILEPATH_GAME_OVER_IMAGE "assets/imgs/game_over.png"
 #define FILEPATH_GAME_WON_IMAGE "assets/imgs/game_won.png"
+#define FILEPATH_SND_PAD_HIT "assets/snd/pad_hit_sound.wav"
+#define FILEPATH_SND_BG "assets/snd/the-weekend-117427.mp3"
+
+#define SND_VOLUME 5 // change this if you don't hear it
