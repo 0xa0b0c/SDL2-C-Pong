@@ -27,3 +27,4 @@ make && make run
 
 - Sound.
 - Startup and pause screen.
+- Challenging AI (I think).
