@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <math.h>
+#include <time.h>
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
@@ -23,7 +24,7 @@
 #define BALL_X_SPEED 2
 #define BALL_X_SPEED_BONUS 1
 #define BALL_X_SPEED_LIMIT 4
-#define BALL_TELEPORT_DISTANCE 10
+#define BALL_Y_SPEED_VALUES_SIZE 6
 
 #define SCOREBOARD_FONT_SIZE 28
 #define SCOREBOARD_TEXT_SIZE 32
@@ -32,12 +33,6 @@
 // SDL Stuff.
 extern bool subystem_init(void);
 extern void subsystem_close(void);
-
-enum {
-	BALL_Y_SPEED_1 = 1,
-	BALL_Y_SPEED_2,
-	BALL_Y_SPEED_3,
-} ball_y_speed;
 
 enum {
 	TEXTURE_STARTUP_MENU_INDEX,
@@ -95,17 +90,18 @@ typedef struct {
 } texture_t;
 
 // Global Variables.
-static SDL_Window     *g_window = 0;
-static SDL_Renderer   *g_renderer = 0;
-static texture_t      *g_textures[TEXTURE_COUNT];
-static game_status_t   g_game_status = GAME_STATUS_MAIN_MENU;
-static paddle_t        g_paddles[PADDLE_COUNT];
-static ball_t          g_ball;
-static int             g_scores[PADDLE_COUNT];
-static TTF_Font       *g_font;
-static Mix_Music      *g_snd_bg_music;
-static Mix_Chunk      *g_snd_pad_hit;
-static Mix_Chunk      *g_snd_score;
+static const int            g_ball_y_speed_values[BALL_Y_SPEED_VALUES_SIZE] = {-3, -2, -1, 1, 2, 3};
+static       SDL_Window    *g_window = 0;
+static       SDL_Renderer  *g_renderer = 0;
+static       texture_t     *g_textures[TEXTURE_COUNT];
+static       game_status_t  g_game_status = GAME_STATUS_MAIN_MENU;
+static       paddle_t       g_paddles[PADDLE_COUNT];
+static       ball_t         g_ball;
+static       int            g_scores[PADDLE_COUNT];
+static       TTF_Font      *g_font;
+static       Mix_Music     *g_snd_bg_music;
+static       Mix_Chunk     *g_snd_pad_hit;
+static       Mix_Chunk     *g_snd_score;
 
 // Game Functions.
 static bool game_init(void);
@@ -135,6 +131,7 @@ static bool game_ball_collision_with_paddle(paddle_t);
 static bool game_load_texture_from_text(const char *, SDL_Color, texture_t **);
 static void game_check_win_condition(void);
 static int  game_get_ball_y_speed(void);
+static int  game_get_random_number(const int, const int);
 
 int
 main(void)
@@ -444,18 +441,17 @@ game_update(void)
 				// Avoid multicollision glitch.
 				if (g_ball.x <= g_ball.w)
 				{
-					g_ball.x += g_ball.w + 1;
+					g_ball.x += g_ball.w + 5;
 				}
 			}
 			else
 			{
 				g_ball.dx = -(game_clamp(BALL_X_SPEED_BONUS + g_ball.dx, BALL_X_SPEED, BALL_X_SPEED_LIMIT));
-				g_ball.x -= BALL_TELEPORT_DISTANCE;
 
 				// Avoid multicollision glitch.
 				if (g_ball.x >= WINDOW_WIDTH - g_ball.w)
 				{
-					g_ball.x = WINDOW_WIDTH - g_ball.w - 1;
+					g_ball.x = WINDOW_WIDTH - g_ball.w - 5;
 				}
 			}
 
@@ -555,7 +551,7 @@ game_set_initial_positions(void)
 		g_ball.y = WINDOW_HEIGHT / 2 - BALL_HEIGHT;
 		g_ball.w = BALL_WIDTH;
 		g_ball.h = BALL_HEIGHT;
-		g_ball.dy = BALL_Y_SPEED_1;
+		g_ball.dy = g_ball_y_speed_values[3];
 	}
 }
 
@@ -649,8 +645,8 @@ game_ball_collision_with_paddle(paddle_t paddle)
 static void
 game_draw_scores(void)
 {
-	char text[SCOREBOARD_FONT_SIZE];
-	snprintf(text, SCOREBOARD_FONT_SIZE, "%d", g_scores[PADDLE_HUMAN_INDEX]);
+	char text[SCOREBOARD_TEXT_SIZE];
+	snprintf(text, SCOREBOARD_TEXT_SIZE, "%d", g_scores[PADDLE_HUMAN_INDEX]);
 
 	const SDL_Color white = {0xff, 0xff, 0xff, 0xff};
 
@@ -664,7 +660,7 @@ game_draw_scores(void)
 		debug_print("Could not load texture from player's score text.\n");
 	}
 
-	snprintf(text, SCOREBOARD_FONT_SIZE, "%d", g_scores[PADDLE_AI_INDEX]);
+	snprintf(text, SCOREBOARD_TEXT_SIZE, "%d", g_scores[PADDLE_AI_INDEX]);
 
 	if (game_load_texture_from_text(text, white, &g_textures[TEXTURE_SCOREBOARD_AI_INDEX]))
 	{
@@ -789,10 +785,13 @@ game_clamp(int n, int min, int max)
 static int
 game_get_ball_y_speed(void)
 {
-	if (g_ball.dy == BALL_Y_SPEED_3)
-	{
-		return BALL_Y_SPEED_1;
-	}
+	const int i = game_get_random_number(0, BALL_Y_SPEED_VALUES_SIZE);
+	return g_ball_y_speed_values[i];
+}
 
-	return g_ball.dy + 1;
+static int
+game_get_random_number(const int min, const int max)
+{
+	srand(time(0));
+	return rand() % (max - min + 1) + min;
 }
