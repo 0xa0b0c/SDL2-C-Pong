@@ -481,14 +481,17 @@ game_update(void)
 	g_ball.x += g_ball.dx;
 	g_ball.y += g_ball.dy;
 
-	if (g_ball.x < 0)
+	// Allow the player to see how the ball goes off the screen.
+	const int offset = 35;
+
+	if (g_ball.x < -g_ball.w - offset)
 	{
 		// CPU scored.
 		++g_scores[PADDLE_AI_INDEX];
 		game_set_initial_positions();
 		Mix_PlayChannel(-1, g_snd_score, 0);
 	}
-	else if (g_ball.x > WINDOW_WIDTH - g_ball.w)
+	else if (g_ball.x > WINDOW_WIDTH + g_ball.w + offset)
 	{
 		// Human scored.
 		++g_scores[PADDLE_HUMAN_INDEX];
@@ -663,14 +666,6 @@ game_draw_scores(void)
 static bool
 game_load_texture_from_text(const char *text, SDL_Color colour, texture_t **t)
 {
-	//
-	// @TODO: this function gets called for both scores (CPU & Human). The thing is that previously
-	// this part (deleting texture) was getting executed always and that's not necessary plus it's
-	// consuming resources.
-	//
-	// The FIX here is: store previous texts (CPU & Human) and check if texts are different. If they
-	// are, delete previous textures. Otherwise just render what we had before.
-	//
 	if ((*t)->sdl_texture)
 	{
 		SDL_DestroyTexture((*t)->sdl_texture);
