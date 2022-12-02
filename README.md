@@ -24,9 +24,9 @@ make && make run
 
 # "Features"
 
-- Sound.
+- Background music and sound effects.
 - Startup and pause screen.
-- Challenging AI (I think).
+- Decent gameplay (although very simple).
 
 # Screenshots
 
