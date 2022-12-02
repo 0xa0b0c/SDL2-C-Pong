@@ -11,7 +11,6 @@ I hope you find something useful in my code but please, be careful, I just start
 - SDL2_image
 - SDL2_ttf
 - SDL2_mixer
-- cppcheck (you can skip this, please read comments in Makefile)
 
 # Installation
 
@@ -28,3 +27,29 @@ make && make run
 - Sound.
 - Startup and pause screen.
 - Challenging AI (I think).
+
+# Screenshots
+
+- Main Screen
+
+![Main Screen](/assets/imgs_readme/screen_start.png?raw=true "Main Screen")
+
+- Game Screen
+
+![Game Screen](/assets/imgs_readme/screen_play.png?raw=true "Game Screen")
+
+- Pause Screen
+
+![Pause Screen](/assets/imgs_readme/screen_play.png?raw=true "Pause Screen")
+
+- Win Screen
+
+![Win Screen](/assets/imgs_readme/screen_win.png?raw=true "Win Screen")
+
+- Lose Screen
+
+![Lose Screen](/assets/imgs_readme/screen_lose.png?raw=true "Lose Screen")
+
+# Bugs
+
+Sometimes there's a multicollision bug between the ball and one of the pads.
