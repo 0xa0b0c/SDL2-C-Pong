@@ -23,6 +23,7 @@
 #define BALL_X_SPEED 2
 #define BALL_X_SPEED_BONUS 1
 #define BALL_X_SPEED_LIMIT 4
+#define BALL_TELEPORT_DISTANCE 10
 
 #define SCOREBOARD_FONT_SIZE 28
 #define SCOREBOARD_TEXT_SIZE 32
@@ -439,10 +440,23 @@ game_update(void)
 			if (g_ball.dx < 0)
 			{
 				g_ball.dx = game_clamp(BALL_X_SPEED_BONUS + -(g_ball.dx), BALL_X_SPEED, BALL_X_SPEED_LIMIT);
+
+				// Avoid multicollision glitch.
+				if (g_ball.x <= g_ball.w)
+				{
+					g_ball.x += g_ball.w + 1;
+				}
 			}
 			else
 			{
 				g_ball.dx = -(game_clamp(BALL_X_SPEED_BONUS + g_ball.dx, BALL_X_SPEED, BALL_X_SPEED_LIMIT));
+				g_ball.x -= BALL_TELEPORT_DISTANCE;
+
+				// Avoid multicollision glitch.
+				if (g_ball.x >= WINDOW_WIDTH - g_ball.w)
+				{
+					g_ball.x = WINDOW_WIDTH - g_ball.w - 1;
+				}
 			}
 
 			g_ball.dy = game_get_ball_y_speed();
