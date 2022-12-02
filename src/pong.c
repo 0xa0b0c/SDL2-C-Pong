@@ -13,13 +13,10 @@
 #include "timer.h"
 
 // Constants.
-#define PADDLE_COUNT 2
 #define PADDLE_WIDTH 10
 #define PADDLE_HEIGHT 50
 #define PADDLE_HUMAN_SPEED 2
 #define PADDLE_CPU_SPEED 2
-#define PADDLE_HUMAN_INDEX 0
-#define PADDLE_AI_INDEX 1
 
 #define BALL_WIDTH 10
 #define BALL_HEIGHT 10
@@ -51,6 +48,13 @@ enum {
 
 	TEXTURE_COUNT
 } game_textures_indices;
+
+enum {
+	PADDLE_HUMAN_INDEX,
+	PADDLE_AI_INDEX,
+
+	PADDLE_COUNT
+} paddle_indices;
 
 // Types.
 typedef enum {
@@ -84,51 +88,52 @@ typedef enum {
 } pad_direction_t;
 
 typedef struct {
-	SDL_Texture *texture;
+	SDL_Texture *sdl_texture;
 	int width;
 	int height;
 } texture_t;
 
 // Global Variables.
-static SDL_Window   *g_window = 0;
-static SDL_Renderer *g_renderer = 0;
-static texture_t    *g_textures[TEXTURE_COUNT];
-static game_status_t g_game_status = GAME_STATUS_MAIN_MENU;
-static paddle_t      g_paddles[PADDLE_COUNT];
-static ball_t        g_ball;
-static int           g_scores[PADDLE_COUNT];
-static TTF_Font     *g_font;
-static Mix_Music    *g_snd_bg_music;
-static Mix_Chunk    *g_snd_pad_hit;
+static SDL_Window     *g_window = 0;
+static SDL_Renderer   *g_renderer = 0;
+static texture_t      *g_textures[TEXTURE_COUNT];
+static game_status_t   g_game_status = GAME_STATUS_MAIN_MENU;
+static paddle_t        g_paddles[PADDLE_COUNT];
+static ball_t          g_ball;
+static int             g_scores[PADDLE_COUNT];
+static TTF_Font       *g_font;
+static Mix_Music      *g_snd_bg_music;
+static Mix_Chunk      *g_snd_pad_hit;
+static Mix_Chunk      *g_snd_score;
 
 // Game Functions.
-static bool  game_init(void);
-static void  game_close(void);
-static bool  game_load_texture_from_img(texture_t **, const char *);
-static int   game_clamp(int, int, int);
-static void  game_loop(void);
-static void  game_render(void);
-static void  game_update(void);
+static bool game_init(void);
+static void game_close(void);
+static bool game_load_texture_from_img(texture_t **, const char *);
+static int  game_clamp(int, int, int);
+static void game_loop(void);
+static void game_render(void);
+static void game_update(void);
 
-static void  game_draw_texture(texture_t *);
-static void  game_draw_paddles(void);
-static void  game_draw_ball(void);
-static void  game_draw_net(void);
-static void  game_draw_scores(void);
+static void game_draw_texture(texture_t *);
+static void game_draw_paddles(void);
+static void game_draw_ball(void);
+static void game_draw_net(void);
+static void game_draw_scores(void);
 
-static void  game_handle_input(SDL_Event *, bool *);
-static void  game_handle_input_main_menu(SDL_Event *);
-static void  game_handle_input_playing(SDL_Event *);
-static void  game_handle_input_paused(SDL_Event *);
-static void  game_handle_input_game_ended(SDL_Event *);
+static void game_handle_input(SDL_Event *, bool *);
+static void game_handle_input_main_menu(SDL_Event *);
+static void game_handle_input_playing(SDL_Event *);
+static void game_handle_input_paused(SDL_Event *);
+static void game_handle_input_game_ended(SDL_Event *);
 
-static void  game_set_initial_positions(void);
-static void  game_reset_scoreboard(void);
-static void  game_update_player_pad(pad_direction_t);
-static bool  game_ball_collision_with_paddle(paddle_t);
-static bool  game_load_texture_from_text(const char *, SDL_Color, texture_t **);
-static void  game_check_win_condition(void);
-static int   game_get_ball_y_speed(void);
+static void game_set_initial_positions(void);
+static void game_reset_scoreboard(void);
+static void game_update_player_pad(pad_direction_t);
+static bool game_ball_collision_with_paddle(paddle_t);
+static bool game_load_texture_from_text(const char *, SDL_Color, texture_t **);
+static void game_check_win_condition(void);
+static int  game_get_ball_y_speed(void);
 
 int
 main(void)
@@ -196,19 +201,24 @@ game_init(void)
 		return false;
 	}
 
-	Mix_VolumeChunk(g_snd_pad_hit, SND_VOLUME);
-	Mix_VolumeMusic(SND_VOLUME);
-
 	if (!g_snd_pad_hit)
 	{
 		(void)fprintf(stderr, "Could not open pad hit sound: %s\n", Mix_GetError());
 		return false;
 	}
 
+	g_snd_score = Mix_LoadWAV(FILEPATH_SND_SCORE);
+
+	if (!g_snd_score)
+	{
+		(void)fprintf(stderr, "Could not load pad score sound: %s\n", Mix_GetError());
+		return false;
+	}
+
 	for (size_t i = 0; i < TEXTURE_COUNT; ++i)
 	{
 		g_textures[i] = malloc(sizeof(texture_t));
-		g_textures[i]->texture = 0;
+		g_textures[i]->sdl_texture = 0;
 	}
 
 	if (!game_load_texture_from_img(&g_textures[TEXTURE_STARTUP_MENU_INDEX], FILEPATH_STARTUP_MENU_IMAGE))
@@ -235,6 +245,11 @@ game_init(void)
 		return false;
 	}
 
+	// Setting volume.
+	Mix_VolumeChunk(g_snd_pad_hit, SND_VOLUME);
+	Mix_VolumeChunk(g_snd_score, SND_VOLUME);
+	Mix_VolumeMusic(SND_VOLUME);
+
 	game_set_initial_positions();
 
 	return true;
@@ -246,6 +261,9 @@ game_close(void)
 	Mix_FreeMusic(g_snd_bg_music);
 	g_snd_bg_music = 0;
 
+	Mix_FreeChunk(g_snd_score);
+	g_snd_score = 0;
+
 	Mix_FreeChunk(g_snd_pad_hit);
 	g_snd_pad_hit = 0;
 
@@ -254,8 +272,8 @@ game_close(void)
 
 	for (size_t i = 0; i < TEXTURE_COUNT; ++i)
 	{
-		SDL_DestroyTexture(g_textures[i]->texture);
-		g_textures[i]->texture = 0;
+		SDL_DestroyTexture(g_textures[i]->sdl_texture);
+		g_textures[i]->sdl_texture = 0;
 		free(g_textures[i]);
 	}
 
@@ -412,33 +430,6 @@ game_draw_net(void)
 static void
 game_update(void)
 {
-	for (size_t i = 0; i < PADDLE_COUNT; ++i)
-	{
-		g_paddles[i].y += g_paddles[i].dy;
-
-		if (g_paddles[i].y <= 0)
-		{
-			g_paddles[i].y = 0;
-		}
-		else if (g_paddles[i].y + g_paddles[i].h > WINDOW_HEIGHT)
-		{
-			g_paddles[i].y = WINDOW_HEIGHT - g_paddles[i].h;
-		}
-	}
-
-	// Update AI.
-	if (g_ball.y < g_paddles[PADDLE_AI_INDEX].y)
-	{
-		g_paddles[PADDLE_AI_INDEX].dy = -PADDLE_CPU_SPEED;
-	}
-	else
-	{
-		g_paddles[PADDLE_AI_INDEX].dy = PADDLE_CPU_SPEED;
-	}
-
-	g_ball.x += g_ball.dx;
-	g_ball.y += g_ball.dy;
-
 	// Check ball's collision with pads.
 	for (size_t i = 0; i < PADDLE_COUNT; ++i)
 	{
@@ -461,17 +452,48 @@ game_update(void)
 		}
 	}
 
+	// Update Human's position.
+	for (size_t i = 0; i < PADDLE_COUNT; ++i)
+	{
+		g_paddles[i].y += g_paddles[i].dy;
+
+		if (g_paddles[i].y <= 0)
+		{
+			g_paddles[i].y = 0;
+		}
+		else if (g_paddles[i].y + g_paddles[i].h > WINDOW_HEIGHT)
+		{
+			g_paddles[i].y = WINDOW_HEIGHT - g_paddles[i].h;
+		}
+	}
+
+	// Update AI's position.
+	if (g_ball.y < g_paddles[PADDLE_AI_INDEX].y)
+	{
+		g_paddles[PADDLE_AI_INDEX].dy = -PADDLE_CPU_SPEED;
+	}
+	else
+	{
+		g_paddles[PADDLE_AI_INDEX].dy = PADDLE_CPU_SPEED;
+	}
+
+	// Update ball's position.
+	g_ball.x += g_ball.dx;
+	g_ball.y += g_ball.dy;
+
 	if (g_ball.x < 0)
 	{
 		// CPU scored.
 		++g_scores[PADDLE_AI_INDEX];
 		game_set_initial_positions();
+		Mix_PlayChannel(-1, g_snd_score, 0);
 	}
 	else if (g_ball.x > WINDOW_WIDTH - g_ball.w)
 	{
 		// Human scored.
 		++g_scores[PADDLE_HUMAN_INDEX];
 		game_set_initial_positions();
+		Mix_PlayChannel(-1, g_snd_score, 0);
 	}
 
 	game_check_win_condition();
@@ -611,14 +633,14 @@ static void
 game_draw_scores(void)
 {
 	char text[SCOREBOARD_FONT_SIZE];
-	const SDL_Color white = {0xff, 0xff, 0xff, 0xff};
-
 	snprintf(text, SCOREBOARD_FONT_SIZE, "%d", g_scores[PADDLE_HUMAN_INDEX]);
+
+	const SDL_Color white = {0xff, 0xff, 0xff, 0xff};
 
 	if (game_load_texture_from_text(text, white, &g_textures[TEXTURE_SCOREBOARD_HUMAN_INDEX]))
 	{
 		SDL_Rect render_quad = {WINDOW_WIDTH * 0.25, 10, g_textures[TEXTURE_SCOREBOARD_HUMAN_INDEX]->width, g_textures[TEXTURE_SCOREBOARD_HUMAN_INDEX]->height};
-		SDL_RenderCopy(g_renderer, g_textures[TEXTURE_SCOREBOARD_HUMAN_INDEX]->texture, 0, &render_quad);
+		SDL_RenderCopy(g_renderer, g_textures[TEXTURE_SCOREBOARD_HUMAN_INDEX]->sdl_texture, 0, &render_quad);
 	}
 	else
 	{
@@ -630,7 +652,7 @@ game_draw_scores(void)
 	if (game_load_texture_from_text(text, white, &g_textures[TEXTURE_SCOREBOARD_AI_INDEX]))
 	{
 		SDL_Rect render_quad = {WINDOW_WIDTH * 0.75, 10, g_textures[TEXTURE_SCOREBOARD_AI_INDEX]->width, g_textures[TEXTURE_SCOREBOARD_AI_INDEX]->height};
-		SDL_RenderCopy(g_renderer, g_textures[TEXTURE_SCOREBOARD_AI_INDEX]->texture, 0, &render_quad);
+		SDL_RenderCopy(g_renderer, g_textures[TEXTURE_SCOREBOARD_AI_INDEX]->sdl_texture, 0, &render_quad);
 	}
 	else
 	{
@@ -641,11 +663,18 @@ game_draw_scores(void)
 static bool
 game_load_texture_from_text(const char *text, SDL_Color colour, texture_t **t)
 {
-	// Override previous texture.
-	if (*t)
+	//
+	// @TODO: this function gets called for both scores (CPU & Human). The thing is that previously
+	// this part (deleting texture) was getting executed always and that's not necessary plus it's
+	// consuming resources.
+	//
+	// The FIX here is: store previous texts (CPU & Human) and check if texts are different. If they
+	// are, delete previous textures. Otherwise just render what we had before.
+	//
+	if ((*t)->sdl_texture)
 	{
-		SDL_DestroyTexture((*t)->texture);
-		(*t)->texture = 0;
+		SDL_DestroyTexture((*t)->sdl_texture);
+		(*t)->sdl_texture = 0;
 	}
 
 	SDL_Surface *surface = TTF_RenderText_Solid(g_font, text, colour);
@@ -656,9 +685,9 @@ game_load_texture_from_text(const char *text, SDL_Color colour, texture_t **t)
 		return false;
 	}
 
-	(*t)->texture = SDL_CreateTextureFromSurface(g_renderer, surface);
+	(*t)->sdl_texture = SDL_CreateTextureFromSurface(g_renderer, surface);
 
-	if (!(*t)->texture)
+	if (!(*t)->sdl_texture)
 	{
 		debug_print("Could not create texture from surface: %s.\n", SDL_GetError());
 	}
@@ -668,7 +697,7 @@ game_load_texture_from_text(const char *text, SDL_Color colour, texture_t **t)
 
 	SDL_FreeSurface(surface);
 
-	return (*t)->texture != 0;
+	return (*t)->sdl_texture != 0;
 }
 
 static bool
@@ -682,9 +711,9 @@ game_load_texture_from_img(texture_t **t, const char *filepath)
 		return false;
 	}
 
-	(*t)->texture = SDL_CreateTextureFromSurface(g_renderer, s);
+	(*t)->sdl_texture = SDL_CreateTextureFromSurface(g_renderer, s);
 
-	if (!(*t)->texture)
+	if (!(*t)->sdl_texture)
 	{
 		debug_print("Could not create texture from surface: %s.\n", SDL_GetError());
 	}
@@ -694,7 +723,7 @@ game_load_texture_from_img(texture_t **t, const char *filepath)
 
 	SDL_FreeSurface(s);
 
-	return (*t)->texture != 0;
+	return (*t)->sdl_texture != 0;
 }
 
 static void
@@ -738,7 +767,7 @@ static void
 game_draw_texture(texture_t *t)
 {
 	SDL_Rect render_quad = {0, 0, t->width, t->height};
-	SDL_RenderCopy(g_renderer, t->texture, 0, &render_quad);
+	SDL_RenderCopy(g_renderer, t->sdl_texture, 0, &render_quad);
 }
 
 static int

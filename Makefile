@@ -3,7 +3,7 @@ CC = cc
 WARN = -Wall -Wextra -pedantic -Werror -march=native
 DEBUG = -ggdb -DDEBUG
 RELEASE = -O3 -DNDEBUG
-CFLAGS = -std=c99 $(DEBUG) $(WARN)
+CFLAGS = -std=c99 $(RELEASE) $(WARN)
 LDFLAGS = -lSDL2 -lSDL2_image -lSDL2_ttf -lSDL2_mixer
 
 # If you don't want to do static analysis, just remove the prerequisite `kesman`.
